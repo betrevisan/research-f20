@@ -2,33 +2,48 @@ import random
 import csv
 
 skills_file = '/Users/bernardoetrevisan/Desktop/research-f20/skills.tsv'
+workers_file = '/Users/bernardoetrevisan/Desktop/research-f20/workers.tsv'
 
 def main():
-    # Load tsv into a list.
-    skills = initialize()
-
-    # Value of p is defined as 5 for now.
-    p = 5
+    skills = load_skills() # Load skills into a list.
+    workers = load_workers() # Load workers into a list.
+    print(workers[0])
+    p = 5 # Value of p is defined as 5 for now.
+    history = [] # List that keeps track of requests
 
     # Initialize the skill to be a random one.
     curr_skill = random_skill(skills)
+    history.append(curr_skill)
+    # cache = find_worker()
 
-    # REMINDER: store stream of requests in a list.
     # Stream of 1K requests.
     for i in range(1000):
-        curr_skill = random_skill() if random.random() <= 1/p else curr_skill
+        if random.random() <= 1/p:
+            curr_skill = random_skill(skills)
+            #cache = find_worker()
+        
+        history.append(curr_skill)
 
-# Helper function that reads the tsv file and stores it into an output list.     
-def initialize():
+        # Outsource worker with this given skill
+
+# Helper function that reads the skills tsv file and stores it into an output list.     
+def load_skills():
     skills_tsv = open(skills_file)
     skills = list(csv.reader(skills_tsv, delimiter="\t"))
     skills_tsv.close()
     return skills
 
+# Helper function that reads the workers tsv file and stores it into an output list. 
+def load_workers():
+    workers_tsv = open(workers_file)
+    workers = list(csv.reader(workers_tsv, delimiter="\t"))
+    workers_tsv.close()
+    return workers
 
 # Helper function that returns a random skill from all the possible ones.
 def random_skill(skills):
     return random.choice(skills)
+
 
 
 
