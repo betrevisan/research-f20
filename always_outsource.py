@@ -17,16 +17,19 @@ def main():
     # Outsource worker
     cost = float(cache[4])
     history.append(curr_skill)
+    # Leave the cache empty
+    cache = None
 
     # Stream of 1K requests.
     for i in range(1000):
         if random.random() <= 1/p:
             curr_skill = random_skill(skills)
-            cache = find_worker(workers, curr_skill)
 
         # Outsource worker
+        cache = find_worker(workers, curr_skill)
         cost = cost + float(cache[4])
         history.append(curr_skill)
+        cache = None
 
     print("The total cost was $" + str(format(cost, '.2f')))
 
