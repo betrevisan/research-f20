@@ -8,28 +8,24 @@ def main():
     skills = load_skills() # Load skills into a list.
     workers = load_workers() # Load workers into a list.
     p = 5 # Value of p is defined as 5 for now.
-    history = [] # List that keeps track of requests
+    history = [] # List that keeps track of requests.
+    cost = 0 # Initializes cost to 0.
 
     # Initialize the skill to be a random one.
     curr_skill = random_skill(skills)
-    # Find worker with the given skill and add them to the cache
-    cache = find_worker(workers, curr_skill)
-    # Outsource worker
-    cost = float(cache[4])
-    history.append(curr_skill)
-    # Leave the cache empty
-    cache = None
 
     # Stream of 1K requests.
     for i in range(1000):
-        if random.random() <= 1/p:
-            curr_skill = random_skill(skills)
-
-        # Outsource worker
+         # Find worker with the given skill and add them to the cache.
         cache = find_worker(workers, curr_skill)
+        # Outsource worker.
         cost = cost + float(cache[4])
         history.append(curr_skill)
+        # Leave the cache empty.
         cache = None
+
+        if random.random() <= 1/p:
+            curr_skill = random_skill(skills)
 
     print("The total cost was $" + str(format(cost, '.2f')))
 
