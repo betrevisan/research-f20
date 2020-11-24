@@ -12,10 +12,12 @@ def main():
     cost_outsource = always_outsource(stream, workers)
     cost_hire = always_hire(stream, workers)
     cost_lru = lru(stream, workers)
+    cost_out_greater_hire = out_greater_hire(stream, workers)
 
     print("The cost of always outsourcing was $" + str(format(cost_outsource, '.2f')))
     print("The cost of always hiring was $" + str(format(cost_hire, '.2f')))
     print("The cost of using the LRU policy was $" + str(format(cost_lru, '.2f')))
+    print("The cost of hiring once outsourcing becomes too expensive was $" + str(format(cost_out_greater_hire, '.2f')))
 
 # Generates a random stream of requests to be used consistently across the different algorithms.
 def random_stream(skills):
@@ -65,7 +67,7 @@ def always_hire(stream, workers):
     
     return cost
 
-
+# Algorithm that uses the LRU policy.
 def lru(stream, workers):
     cost = 0
     cache = [None, None, None, None, None, None, None, None, 0]
@@ -94,6 +96,38 @@ def lru(stream, workers):
             cache[8] += 1
 
     return cost
+
+# Algorithm that hires once total outsourcing cost becomes too large
+def out_greater_hire(stream, workers):
+    cost = 0
+    cache = [None, None, None, 0, None, None, None, None, 0]
+
+    # Reset the counter of each worker.
+    workers = reset_counter(workers)
+    
+    # For each request in the stream, apply the outsource greater than hiring policy.
+    for r in stream:
+        #print("r:" + r)
+        if r != cache[7]:
+            # Find worker with the given skill.
+            new_worker = find_worker(workers, r)
+
+            #print("" + str(new_worker[8]) + " > " + new_worker[3])
+
+            # If the worker's total outsourcing costs become more expensive than hiring, hire.
+            if new_worker[8] > float(new_worker[3]):
+                #print("hire")
+                cache = new_worker
+                cost = cost + float(cache[3])
+            else:
+                #print("out")
+                # Outsource the worker if outsourcing is still cheaper
+                cost = cost + float(new_worker[4])
+                new_worker[8] = new_worker[8] + float(new_worker[4])
+                #print("new outsourcing total:" + str(new_worker[8]))
+
+    return cost
+
 
 # Helper function that reads the skills tsv file and stores it into an output list.     
 def load_skills():
@@ -124,6 +158,13 @@ def find_worker(workers, skill_id):
 def add_counter(workers):
     for worker in workers:
         worker = worker.append(0)
+
+    return workers
+
+# Helper function that resets the counter of each worker
+def reset_counter(workers):
+    for worker in workers:
+        worker[8] = 0
 
     return workers
 
