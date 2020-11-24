@@ -13,11 +13,13 @@ def main():
     cost_hire = always_hire(stream, workers)
     cost_lru = lru(stream, workers)
     cost_out_greater_hire = out_greater_hire(stream, workers)
+    cost_primal_dual = primal_dual(stream, workers)
 
     print("The cost of always outsourcing was $" + str(format(cost_outsource, '.2f')))
     print("The cost of always hiring was $" + str(format(cost_hire, '.2f')))
     print("The cost of using the LRU policy was $" + str(format(cost_lru, '.2f')))
     print("The cost of hiring once outsourcing becomes too expensive was $" + str(format(cost_out_greater_hire, '.2f')))
+    print("The cost of the primal dual algorithm was $" + str(format(cost_primal_dual, '.2f')))
 
 # Generates a random stream of requests to be used consistently across the different algorithms.
 def random_stream(skills):
@@ -28,7 +30,7 @@ def random_stream(skills):
     curr_skill = random_skill(skills)
 
     # Stream of 1K requests.
-    for i in range(1000):
+    for i in range(10000):
         stream.append(curr_skill)
         # Only change the current skill acording to p.
         if random.random() <= 1/p:
@@ -107,28 +109,55 @@ def out_greater_hire(stream, workers):
     
     # For each request in the stream, apply the outsource greater than hiring policy.
     for r in stream:
-        #print("r:" + r)
         if r != cache[7]:
             # Find worker with the given skill.
             new_worker = find_worker(workers, r)
 
-            #print("" + str(new_worker[8]) + " > " + new_worker[3])
-
             # If the worker's total outsourcing costs become more expensive than hiring, hire.
             if new_worker[8] > float(new_worker[3]):
-                #print("hire")
                 cache = new_worker
                 cost = cost + float(cache[3])
             else:
-                #print("out")
                 # Outsource the worker if outsourcing is still cheaper
                 cost = cost + float(new_worker[4])
                 new_worker[8] = new_worker[8] + float(new_worker[4])
-                #print("new outsourcing total:" + str(new_worker[8]))
 
     return cost
 
+# Algorithm that will hire and outsource based on a primal and a dual.
+def primal_dual(stream, workers):
+    cost = 0
+    c = 1 # Constant C, which is the size of the cache.
+    cache = [None, None, None, None, None, None, None, None, 0] # Cache of size 1
 
+
+    # Reset the counter of each worker, which will now be the hiring variable.
+    workers = reset_counter(workers)
+
+    # For each request in the stream, apply the primal-dual algorithm.
+    for r in stream:
+        # If the worker requested is not hired.
+        if r != cache[7]:
+            new_worker = find_worker(workers, r)
+
+            # Check if their hiring variable is greater than 1.
+            if new_worker[8] >= 1:
+                # Hire
+                cost = cost + float(new_worker[3])
+                # Add worker to the cache
+                cache = new_worker
+                # Restart hiring variable for future iterations
+                new_worker[8] = 0
+                # PS: In a scenario with a cache of size 1, there is no need for the distinction as to who should be evicted
+                # since there is only one option. However, this should be implemented in the case of a cache greater than 1.
+            else:
+                # Outsource    
+                cost = cost + float(new_worker[4])
+                # Update hiring variable
+                new_worker[8] = new_worker[8] * (1 + 1/float(new_worker[3])) + 1/(c * float(new_worker[3]))
+    
+    return cost
+            
 # Helper function that reads the skills tsv file and stores it into an output list.     
 def load_skills():
     skills_tsv = open(skills_file)
