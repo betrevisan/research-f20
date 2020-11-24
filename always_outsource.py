@@ -1,5 +1,6 @@
 import random
 import csv
+import matplotlib.pyplot as plt
 
 skills_file = '/Users/bernardoetrevisan/Desktop/research-f20/skills.tsv'
 workers_file = '/Users/bernardoetrevisan/Desktop/research-f20/workers.tsv'
@@ -15,11 +16,22 @@ def main():
     cost_out_greater_hire = out_greater_hire(stream, workers)
     cost_primal_dual = primal_dual(stream, workers)
 
-    print("The cost of always outsourcing was $" + str(format(cost_outsource, '.2f')))
-    print("The cost of always hiring was $" + str(format(cost_hire, '.2f')))
-    print("The cost of using the LRU policy was $" + str(format(cost_lru, '.2f')))
-    print("The cost of hiring once outsourcing becomes too expensive was $" + str(format(cost_out_greater_hire, '.2f')))
-    print("The cost of the primal dual algorithm was $" + str(format(cost_primal_dual, '.2f')))
+    print("The cost of always outsourcing was $" + str(format(cost_outsource[1000], '.2f')))
+    print("The cost of always hiring was $" + str(format(cost_hire[1000], '.2f')))
+    print("The cost of using the LRU policy was $" + str(format(cost_lru[1000], '.2f')))
+    print("The cost of hiring once outsourcing becomes too expensive was $" + str(format(cost_out_greater_hire[1000], '.2f')))
+    print("The cost of the primal dual algorithm was $" + str(format(cost_primal_dual[1000], '.2f')))
+
+    # Display plots
+    plt.plot(cost_outsource, label='Outsource')
+    plt.plot(cost_hire, label='Hire')
+    plt.plot(cost_lru, label='LRU')
+    plt.plot(cost_out_greater_hire, label='Outsource >= Hiring')
+    plt.plot(cost_primal_dual, label='Primal-Dual')
+    plt.xlabel("Length of Stream of Requests")
+    plt.ylabel("Total Cost")
+    plt.legend()
+    plt.show()
 
 # Generates a random stream of requests to be used consistently across the different algorithms.
 def random_stream(skills):
@@ -30,7 +42,7 @@ def random_stream(skills):
     curr_skill = random_skill(skills)
 
     # Stream of 1K requests.
-    for i in range(10000):
+    for i in range(1000):
         stream.append(curr_skill)
         # Only change the current skill acording to p.
         if random.random() <= 1/p:
@@ -41,6 +53,7 @@ def random_stream(skills):
 # Algorithm that always outsources workers and keeps the cache empty
 def always_outsource(stream, workers):
     cost = 0
+    history = [0]
 
     # For each request in the stream, outsource
     for r in stream:
@@ -48,15 +61,17 @@ def always_outsource(stream, workers):
         cache = find_worker(workers, r)
         # Outsource worker.
         cost = cost + float(cache[4])
+        history.append(cost)
         # Leave the cache empty.
         cache = None
     
-    return cost
+    return history
 
 # Algorithm that always hires workers when they are not in the cache
 def always_hire(stream, workers):
     cost = 0
     cache = [None, None, None, None, None, None, None, None]
+    history = [0]
 
     # For each request in the stream, hire.
     for r in stream:
@@ -66,13 +81,15 @@ def always_hire(stream, workers):
             cache = find_worker(workers, r)
             # Hire worker and keep them in the cache.
             cost = cost + float(cache[3])
+        history.append(cost)
     
-    return cost
+    return history
 
 # Algorithm that uses the LRU policy.
 def lru(stream, workers):
     cost = 0
     cache = [None, None, None, None, None, None, None, None, 0]
+    history = [0]
 
     # Add a call tracker to each worker.
     workers = add_counter(workers)
@@ -97,12 +114,15 @@ def lru(stream, workers):
             # Increment the call counter
             cache[8] += 1
 
-    return cost
+        history.append(cost)
+
+    return history
 
 # Algorithm that hires once total outsourcing cost becomes too large
 def out_greater_hire(stream, workers):
     cost = 0
     cache = [None, None, None, 0, None, None, None, None, 0]
+    history = [0]
 
     # Reset the counter of each worker.
     workers = reset_counter(workers)
@@ -122,13 +142,16 @@ def out_greater_hire(stream, workers):
                 cost = cost + float(new_worker[4])
                 new_worker[8] = new_worker[8] + float(new_worker[4])
 
-    return cost
+        history.append(cost)
+
+    return history
 
 # Algorithm that will hire and outsource based on a primal and a dual.
 def primal_dual(stream, workers):
     cost = 0
     c = 1 # Constant C, which is the size of the cache.
     cache = [None, None, None, None, None, None, None, None, 0] # Cache of size 1
+    history = [0]
 
 
     # Reset the counter of each worker, which will now be the hiring variable.
@@ -155,8 +178,10 @@ def primal_dual(stream, workers):
                 cost = cost + float(new_worker[4])
                 # Update hiring variable
                 new_worker[8] = new_worker[8] * (1 + 1/float(new_worker[3])) + 1/(c * float(new_worker[3]))
+        
+        history.append(cost)
     
-    return cost
+    return history
             
 # Helper function that reads the skills tsv file and stores it into an output list.     
 def load_skills():
