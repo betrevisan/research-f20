@@ -10,11 +10,14 @@ def main():
     workers = load_workers() # Load workers into a list.
     stream = random_stream(skills) # Generates the random stream of requests.
 
-    cost_outsource = always_outsource(stream, workers)
-    cost_hire = always_hire(stream, workers)
-    cost_lru = lru(stream, workers)
-    cost_out_greater_hire = out_greater_hire(stream, workers)
-    cost_primal_dual = primal_dual(stream, workers)
+    cache(3, workers, stream)
+
+def cache(size, workers, stream):
+    cost_outsource = always_outsource(size, stream, workers)
+    cost_hire = always_hire(size, stream, workers)
+    cost_lru = lru(size, stream, workers)
+    cost_out_greater_hire = out_greater_hire(size, stream, workers)
+    cost_primal_dual = primal_dual(size, stream, workers)
 
     print("The cost of always outsourcing was $" + str(format(cost_outsource[1000], '.2f')))
     print("The cost of always hiring was $" + str(format(cost_hire[1000], '.2f')))
@@ -23,15 +26,16 @@ def main():
     print("The cost of the primal dual algorithm was $" + str(format(cost_primal_dual[1000], '.2f')))
 
     # Display plots
-    plt.plot(cost_outsource, label='Outsource')
-    plt.plot(cost_hire, label='Hire')
-    plt.plot(cost_lru, label='LRU')
-    plt.plot(cost_out_greater_hire, label='Outsource >= Hiring')
-    plt.plot(cost_primal_dual, label='Primal-Dual')
-    plt.xlabel("Length of Stream of Requests")
-    plt.ylabel("Total Cost")
-    plt.legend()
-    plt.show()
+    # plt.plot(cost_outsource, label='Outsource')
+    # plt.plot(cost_hire, label='Hire')
+    # plt.plot(cost_lru, label='LRU')
+    # plt.plot(cost_out_greater_hire, label='Outsource >= Hiring')
+    # plt.plot(cost_primal_dual, label='Primal-Dual')
+    # plt.xlabel("Length of Stream of Requests")
+    # plt.ylabel("Total Cost")
+    # plt.title("Cache of size " + str(size))
+    # plt.legend()
+    # plt.show()
 
 # Generates a random stream of requests to be used consistently across the different algorithms.
 def random_stream(skills):
@@ -42,7 +46,7 @@ def random_stream(skills):
     curr_skill = random_skill(skills)
 
     # Stream of 1K requests.
-    for i in range(1000):
+    for i in range(10):
         stream.append(curr_skill)
         # Only change the current skill acording to p.
         if random.random() <= 1/p:
@@ -51,7 +55,7 @@ def random_stream(skills):
     return stream
 
 # Algorithm that always outsources workers and keeps the cache empty
-def always_outsource(stream, workers):
+def always_outsource(size, stream, workers):
     cost = 0
     history = [0]
 
@@ -68,27 +72,33 @@ def always_outsource(stream, workers):
     return history
 
 # Algorithm that always hires workers when they are not in the cache
-def always_hire(stream, workers):
+def always_hire(size, stream, workers):
     cost = 0
-    cache = [None, None, None, None, None, None, None, None]
+    cache = []
     history = [0]
 
     # For each request in the stream, hire.
     for r in stream:
-        # Hire onlye if the worker is not yet in the cache.
-        if r != cache[7]:
-            # Find worker with the given skill and add them to the cache.
-            cache = find_worker(workers, r)
-            # Hire worker and keep them in the cache.
-            cost = cost + float(cache[3])
+        # Hire only if the worker is not yet in the cache.
+        if not in_cache(cache, r):
+            # Find worker with the given skill.
+            new_worker = find_worker(workers, r)
+            # Add worker to the cache.
+            cache.append(new_worker)
+            # If the cache is too large.
+            if len(cache) > size:
+                # Remove the oldest worker
+                cache.pop(0)
+            
+            cost = cost + float(new_worker[3])
         history.append(cost)
     
     return history
 
 # Algorithm that uses the LRU policy.
-def lru(stream, workers):
+def lru(size, stream, workers):
     cost = 0
-    cache = [None, None, None, None, None, None, None, None, 0]
+    cache = []
     history = [0]
 
     # Add a call tracker to each worker.
@@ -96,30 +106,35 @@ def lru(stream, workers):
     
     # For each request in the stream, apply the LRU policy.
     for r in stream:
-        if r != cache[7]:
+        print(r)
+        print(cache)
+        if not in_cache(cache, r):
+            print("hire")
             # Find worker with the given skill.
             new_worker = find_worker(workers, r)
 
-            # If the worker with the given skill occurs more often than the one in the cache, hire.
-            if cache[8] <= new_worker[8]:
-                cache = new_worker
-                cost = cost + float(cache[3])
-                # Increment the call counter
-                cache[8] += 1
-            else:
-                # Outsource the worker if the one in the cache is more popular
-                cost = cost + float(new_worker[4])
-                new_worker[8] += 1
+            # Add worker to the cache.
+            cache.append(new_worker)
+            # If the cache is too large.
+            if len(cache) > size:
+                # Remove the LRU worker
+                remove_lru(cache)
+            
+            cost = cost + float(new_worker[3])
+            # Increment the number of calls of the new worker
+            new_worker[8] += 1
+
         else:
+            worker = find_worker(workers, r)
             # Increment the call counter
-            cache[8] += 1
+            worker[8] += 1
 
         history.append(cost)
 
     return history
 
 # Algorithm that hires once total outsourcing cost becomes too large
-def out_greater_hire(stream, workers):
+def out_greater_hire(size, stream, workers):
     cost = 0
     cache = [None, None, None, 0, None, None, None, None, 0]
     history = [0]
@@ -147,7 +162,7 @@ def out_greater_hire(stream, workers):
     return history
 
 # Algorithm that will hire and outsource based on a primal and a dual.
-def primal_dual(stream, workers):
+def primal_dual(size, stream, workers):
     cost = 0
     c = 1 # Constant C, which is the size of the cache.
     cache = [None, None, None, None, None, None, None, None, 0] # Cache of size 1
@@ -208,6 +223,13 @@ def find_worker(workers, skill_id):
             return worker
     return False
 
+# Helper function that returns true if the worker is in the cache and false otherwise.
+def in_cache(cache, skill_id):
+    for worker in cache:
+        if worker[7] == skill_id:
+            return True
+    return False
+
 # Helper function that add as counter to each worker
 def add_counter(workers):
     for worker in workers:
@@ -221,6 +243,18 @@ def reset_counter(workers):
         worker[8] = 0
 
     return workers
+
+def remove_lru(cache):
+    minimum = 1000
+    count = 0
+    delete = 0
+
+    for worker in cache:
+        if worker[8] < minimum:
+            min = worker[8]
+            delete = count
+
+    cache.pop(delete)
 
 if __name__ == "__main__":
     main()
