@@ -1,6 +1,7 @@
 import random
 import csv
 import matplotlib.pyplot as plt
+import pprint as pp
 
 skills_file = '/Users/bernardoetrevisan/Desktop/research-f20/skills.tsv'
 workers_file = '/Users/bernardoetrevisan/Desktop/research-f20/workers.tsv'
@@ -8,7 +9,8 @@ workers_file = '/Users/bernardoetrevisan/Desktop/research-f20/workers.tsv'
 def main():
     skills = load_skills() # Load skills into a list.
     workers = load_workers() # Load workers into a list.
-    stream = random_stream(skills) # Generates the random stream of requests.
+
+    stream = random_stream(skills, length=1000, p=50, seed=10) # Generates the random stream of requests.
 
     cost_outsource = always_outsource(stream, workers)
     cost_hire = always_hire(stream, workers)
@@ -16,11 +18,11 @@ def main():
     cost_out_greater_hire = out_greater_hire(stream, workers)
     cost_primal_dual = primal_dual(stream, workers)
 
-    print("The cost of always outsourcing was $" + str(format(cost_outsource[1000], '.2f')))
-    print("The cost of always hiring was $" + str(format(cost_hire[1000], '.2f')))
-    print("The cost of using the LRU policy was $" + str(format(cost_lru[1000], '.2f')))
-    print("The cost of hiring once outsourcing becomes too expensive was $" + str(format(cost_out_greater_hire[1000], '.2f')))
-    print("The cost of the primal dual algorithm was $" + str(format(cost_primal_dual[1000], '.2f')))
+    # print("The cost of always outsourcing was $" + str(format(cost_outsource[1000], '.2f')))
+    # print("The cost of always hiring was $" + str(format(cost_hire[1000], '.2f')))
+    # print("The cost of using the LRU policy was $" + str(format(cost_lru[1000], '.2f')))
+    # print("The cost of hiring once outsourcing becomes too expensive was $" + str(format(cost_out_greater_hire[1000], '.2f')))
+    # print("The cost of the primal dual algorithm was $" + str(format(cost_primal_dual[1000], '.2f')))
 
     # Display plots
     plt.plot(cost_outsource, label='Outsource')
@@ -34,18 +36,20 @@ def main():
     plt.show()
 
 # Generates a random stream of requests to be used consistently across the different algorithms.
-def random_stream(skills):
+def random_stream(skills, length=1000, p=5, seed=None):
+    # Seed is used to to always obtain the same random stream, when seed != None.
+    random.seed(seed)
+
     stream = [] # List that keeps track of requests.
-    p = 5 # Value of p is defined as 5 for now.
 
     # Initialize the skill to be a random one.
     curr_skill = random_skill(skills)
 
-    # Stream of 1K requests.
-    for i in range(1000):
+    # Stream of requests of given length.
+    for i in range(length):
         stream.append(curr_skill)
         # Only change the current skill acording to p.
-        if random.random() <= 1/p:
+        if random.random() <= 1 / p:
             curr_skill = random_skill(skills)
     
     return stream
@@ -58,29 +62,27 @@ def always_outsource(stream, workers):
     # For each request in the stream, outsource
     for r in stream:
         # Find worker with the given skill and add them to the cache.
-        cache = find_worker(workers, r)
+        selected_worker = find_worker(workers, r)
         # Outsource worker.
-        cost = cost + float(cache[4])
+        cost = cost + selected_worker["outsourcing_cost"]
         history.append(cost)
-        # Leave the cache empty.
-        cache = None
     
     return history
 
 # Algorithm that always hires workers when they are not in the cache
 def always_hire(stream, workers):
     cost = 0
-    cache = [None, None, None, None, None, None, None, None]
+    cache = {}
     history = [0]
 
     # For each request in the stream, hire.
     for r in stream:
-        # Hire onlye if the worker is not yet in the cache.
-        if r != cache[7]:
+        # Hire only if the worker is not yet in the cache.
+        if r != cache.get("skill_id", -1):
             # Find worker with the given skill and add them to the cache.
             cache = find_worker(workers, r)
             # Hire worker and keep them in the cache.
-            cost = cost + float(cache[3])
+            cost = cost + cache["hiring_cost"]
         history.append(cost)
     
     return history
@@ -88,7 +90,7 @@ def always_hire(stream, workers):
 # Algorithm that uses the LRU policy.
 def lru(stream, workers):
     cost = 0
-    cache = [None, None, None, None, None, None, None, None, 0]
+    cache = {}
     history = [0]
 
     # Add a call tracker to each worker.
@@ -96,23 +98,23 @@ def lru(stream, workers):
     
     # For each request in the stream, apply the LRU policy.
     for r in stream:
-        if r != cache[7]:
+        if r != cache.get("skill_id", -1):
             # Find worker with the given skill.
             new_worker = find_worker(workers, r)
 
             # If the worker with the given skill occurs more often than the one in the cache, hire.
-            if cache[8] <= new_worker[8]:
+            if cache.get("num_requests", -1) <= new_worker.get("num_requests", -1):
                 cache = new_worker
-                cost = cost + float(cache[3])
+                cost = cost + cache["hiring_cost"]
                 # Increment the call counter
-                cache[8] += 1
+                cache["num_requests"] += 1
             else:
                 # Outsource the worker if the one in the cache is more popular
-                cost = cost + float(new_worker[4])
-                new_worker[8] += 1
+                cost = cost + new_worker["outsourcing_cost"]
+                new_worker["num_requests"] += 1
         else:
             # Increment the call counter
-            cache[8] += 1
+            cache["num_requests"] += 1
 
         history.append(cost)
 
@@ -121,26 +123,27 @@ def lru(stream, workers):
 # Algorithm that hires once total outsourcing cost becomes too large
 def out_greater_hire(stream, workers):
     cost = 0
-    cache = [None, None, None, 0, None, None, None, None, 0]
+    cache = {}
     history = [0]
 
     # Reset the counter of each worker.
-    workers = reset_counter(workers)
+    workers = reset_total_outsourcing_cost(workers)
     
     # For each request in the stream, apply the outsource greater than hiring policy.
     for r in stream:
-        if r != cache[7]:
+        if r != cache.get("skill_id", -1):
             # Find worker with the given skill.
             new_worker = find_worker(workers, r)
 
             # If the worker's total outsourcing costs become more expensive than hiring, hire.
-            if new_worker[8] > float(new_worker[3]):
+            if new_worker["total_outsourcing_cost"] > new_worker["hiring_cost"]:
+                new_worker["total_outsourcing_cost"] = 0.
                 cache = new_worker
-                cost = cost + float(cache[3])
+                cost = cost + cache["hiring_cost"]
             else:
                 # Outsource the worker if outsourcing is still cheaper
-                cost = cost + float(new_worker[4])
-                new_worker[8] = new_worker[8] + float(new_worker[4])
+                cost = cost + new_worker["outsourcing_cost"]
+                new_worker["total_outsourcing_cost"] += new_worker["outsourcing_cost"]
 
         history.append(cost)
 
@@ -150,34 +153,35 @@ def out_greater_hire(stream, workers):
 def primal_dual(stream, workers):
     cost = 0
     c = 1 # Constant C, which is the size of the cache.
-    cache = [None, None, None, None, None, None, None, None, 0] # Cache of size 1
+    cache = {} # Cache of size 1
     history = [0]
 
 
     # Reset the counter of each worker, which will now be the hiring variable.
-    workers = reset_counter(workers)
+    workers = reset_h_variable(workers)
 
     # For each request in the stream, apply the primal-dual algorithm.
     for r in stream:
         # If the worker requested is not hired.
-        if r != cache[7]:
+        if r != cache.get("skill_id", -1):
             new_worker = find_worker(workers, r)
 
             # Check if their hiring variable is greater than 1.
-            if new_worker[8] >= 1:
-                # Hire
-                cost = cost + float(new_worker[3])
+            if new_worker["h"] >= 1.:
+                # Restart hiring variable for future iterations
+                new_worker["h"] = 0.
                 # Add worker to the cache
                 cache = new_worker
-                # Restart hiring variable for future iterations
-                new_worker[8] = 0
+                # Hire
+                cost = cost + cache["hiring_cost"]
                 # PS: In a scenario with a cache of size 1, there is no need for the distinction as to who should be evicted
                 # since there is only one option. However, this should be implemented in the case of a cache greater than 1.
             else:
                 # Outsource    
-                cost = cost + float(new_worker[4])
+                cost = cost + new_worker["outsourcing_cost"]
                 # Update hiring variable
-                new_worker[8] = new_worker[8] * (1 + 1/float(new_worker[3])) + 1/(c * float(new_worker[3]))
+                new_worker["h"] = new_worker["h"] * (1. + (1. / new_worker["hiring_cost"])) + (
+                        1. / (c * new_worker["hiring_cost"]))
         
         history.append(cost)
     
@@ -188,6 +192,7 @@ def load_skills():
     skills_tsv = open(skills_file)
     skills = list(csv.reader(skills_tsv, delimiter="\t"))
     skills_tsv.close()
+    skills = list(int(record[0]) for record in skills)
     return skills
 
 # Helper function that reads the workers tsv file and stores it into an output list. 
@@ -195,30 +200,47 @@ def load_workers():
     workers_tsv = open(workers_file)
     workers = list(csv.reader(workers_tsv, delimiter="\t"))
     workers_tsv.close()
-    return workers
+    list_ws = []
+    for w in workers:
+        new_w = {}
+        new_w["id"] = int(w[0])
+        new_w["hiring_cost"] = float(w[3])
+        new_w["outsourcing_cost"] = float(w[4])
+        new_w["skill_id"] = int(w[-1])
+
+        list_ws.append(new_w)
+
+    return list_ws
 
 # Helper function that returns a random skill from all the possible ones.
 def random_skill(skills):
-    return random.choice(skills)[0]
+    return random.choice(skills)
 
 # Helper function that finds the worker with the given skill id and returns them.
 def find_worker(workers, skill_id):
     for worker in workers:
-        if worker[7] == skill_id:
+        if worker["skill_id"] == skill_id:
             return worker
     return False
 
 # Helper function that add as counter to each worker
 def add_counter(workers):
     for worker in workers:
-        worker = worker.append(0)
+        worker["num_requests"] = 0
 
     return workers
 
 # Helper function that resets the counter of each worker
-def reset_counter(workers):
+def reset_total_outsourcing_cost(workers):
     for worker in workers:
-        worker[8] = 0
+        worker["total_outsourcing_cost"] = 0.
+
+    return workers
+
+# Helper function that resets the counter of each worker
+def reset_h_variable(workers):
+    for worker in workers:
+        worker["h"] = 0.
 
     return workers
 
