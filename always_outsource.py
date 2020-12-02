@@ -10,27 +10,30 @@ def main():
     skills = load_skills() # Load skills into a list.
     workers = load_workers() # Load workers into a list.
 
-    stream = random_stream(skills, length=1000, p=50, seed=10) # Generates the random stream of requests.
+    stream = random_stream(skills, length=1000, p=5, seed=10) # Generates the random stream of requests.
 
-    cache(1, workers, stream)
+    cache(10, workers, stream)
 
 def cache(size, workers, stream):
     cost_outsource = always_outsource(stream, workers)
     cost_hire = always_hire(size, stream, workers)
     cost_lru = lru(size, stream, workers)
+    cost_popularity = popularity(size, stream, workers)
     cost_out_greater_hire = out_greater_hire(size, stream, workers)
     cost_primal_dual = primal_dual(size, stream, workers)
 
-    # print("The cost of always outsourcing was $" + str(format(cost_outsource[1000], '.2f')))
-    # print("The cost of always hiring was $" + str(format(cost_hire[1000], '.2f')))
-    # print("The cost of using the LRU policy was $" + str(format(cost_lru[1000], '.2f')))
-    # print("The cost of hiring once outsourcing becomes too expensive was $" + str(format(cost_out_greater_hire[1000], '.2f')))
-    # print("The cost of the primal dual algorithm was $" + str(format(cost_primal_dual[1000], '.2f')))
+    print("The cost of always outsourcing was $" + str(format(cost_outsource[1000], '.2f')))
+    print("The cost of always hiring was $" + str(format(cost_hire[1000], '.2f')))
+    print("The cost of using the LRU policy was $" + str(format(cost_lru[1000], '.2f')))
+    print("The cost of using the popularity policy was $" + str(format(cost_popularity[1000], '.2f')))
+    print("The cost of hiring once outsourcing becomes too expensive was $" + str(format(cost_out_greater_hire[1000], '.2f')))
+    print("The cost of the primal dual algorithm was $" + str(format(cost_primal_dual[1000], '.2f')))
 
     # Display plots
     plt.plot(cost_outsource, label='Outsource')
     plt.plot(cost_hire, label='Hire')
     plt.plot(cost_lru, label='LRU')
+    plt.plot(cost_popularity, label='Popularity')
     plt.plot(cost_out_greater_hire, label='Outsource >= Hiring')
     plt.plot(cost_primal_dual, label='Primal-Dual')
     plt.xlabel("Length of Stream of Requests")
@@ -184,7 +187,7 @@ def out_greater_hire(size, stream, workers):
             # If the worker's total outsourcing costs become more expensive than hiring, hire.
             if new_worker["total_outsourcing_cost"] > new_worker["hiring_cost"]:
                 new_worker["total_outsourcing_cost"] = 0.
-                cost = cost + cache["hiring_cost"]
+                cost = cost + new_worker["hiring_cost"]
                 cache.append(new_worker)
                 # If the cache is too large.
                 if len(cache) > size:
